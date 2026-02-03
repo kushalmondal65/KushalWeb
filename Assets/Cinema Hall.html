@@ -1,0 +1,1275 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Cinema Hall</title>
+
+  <!-- Bootstrap 5 CSS (CDN) -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    :root{
+      --accent:#0d6efd;
+      --card-radius:12px;
+    }
+    body{
+      background: linear-gradient(180deg,#f8fafc 0%, #ffffff 60%);
+      color:#111827;
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      padding-bottom: 4rem;
+    }
+    .movie-card { border-radius: var(--card-radius); transition: transform .12s ease, box-shadow .12s ease; }
+    .movie-card:hover { transform: translateY(-6px); box-shadow: 0 10px 30px rgba(13,110,253,0.08); }
+    .poster { height: 220px; object-fit: cover; border-top-left-radius: var(--card-radius); border-top-right-radius: var(--card-radius); width:100%; }
+    .genre-badge { font-size: .72rem; margin-right: .25rem; }
+    .rating { color: #f59e0b; font-weight:700; }
+    .search-input { max-width: 720px; }
+    .chip { background:#eef2ff; color:#3730a3; padding:.25rem .5rem; border-radius:999px; font-size:.78rem; margin-right:.35rem; }
+    .small-muted { font-size:.85rem; color:#6b7280; }
+    .recommendation { font-size:.9rem; }
+    @media (max-width:576px){ .poster { height:180px; } }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom">
+    <div class="container">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <rect width="24" height="24" rx="6" fill="#0d6efd"></rect>
+          <path d="M7 9h10v2H7zM7 13h7v2H7z" fill="#fff"></path>
+        </svg>
+        <strong>Cinema Hall</strong>
+      </a>
+
+      <div class="ms-auto d-flex align-items-center gap-3">
+        <div class="small-muted">Public movie details • Demo</div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container py-4">
+    <!-- Search & Filters -->
+    <section class="mb-4">
+      <div class="d-flex flex-column flex-md-row gap-3 align-items-start">
+        <div class="flex-grow-1">
+          <input id="search" class="form-control search-input" type="search" placeholder="Search by title, actor, or keyword" aria-label="Search movies">
+        </div>
+
+        <div class="d-flex gap-2 align-items-center">
+          <select id="genreFilter" class="form-select" aria-label="Filter by genre">
+            <option value="">All genres</option>
+          </select>
+
+          <select id="sortSelect" class="form-select" aria-label="Sort movies">
+            <option value="popular">Sort: Popular</option>
+            <option value="newest">Sort: Newest</option>
+            <option value="rating">Sort: Rating</option>
+            <option value="title">Sort: Title</option>
+          </select>
+
+          <select id="typeSelect" class="form-select" aria-label="Sort type">
+            <option value="movies">Sort: Movies</option>
+            <option value="tv series">Sort: TV Series</option>
+          </select>  
+        </div>
+      </div>
+    </section>
+
+    <!-- Movie grid -->
+    <section>
+      <div id="moviesGrid" class="row g-3" aria-live="polite"></div>
+      <div id="noResults" class="text-center text-muted mt-4 d-none">No movies found. Try a different search or filter.</div>
+    </section>
+  </main>
+
+  <!-- Movie detail modal -->
+  <div class="modal fade" id="movieModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-body p-0">
+          <div class="row g-0">
+            <div class="col-md-4">
+              <img id="modalPoster" src="" alt="" class="w-100 h-100 object-fit-cover" style="height:100%;border-top-left-radius:12px;border-bottom-left-radius:12px;object-fit:cover;">
+            </div>
+            <div class="col-md-8 p-4">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <h3 id="modalTitle" class="mb-1"></h3>
+                  <div class="small-muted" id="modalMeta"></div>
+                </div>
+                <div class="text-end">
+                  <div class="rating" id="modalRating"></div>
+                  <div class="small-muted">Runtime: <span id="modalRuntime"></span></div>
+                </div>
+              </div>
+
+              <hr>
+
+              <p id="modalSynopsis" class="mb-3"></p>
+
+              <div class="mb-3">
+                <strong>Genres</strong>
+                <div id="modalGenres" class="mt-2"></div>
+              </div>
+
+              <div class="mb-3">
+                <strong>Cast</strong>
+                <div id="modalCast" class="mt-2 small-muted"></div>
+              </div>
+
+              <div>
+                <strong>Recommended for you</strong>
+                <div id="modalRecommendations" class="mt-2"></div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+          <a id="imdbLink" class="btn btn-primary" target="_blank" rel="noopener">View on IMDb</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sample data + JS -->
+  <script>
+    // Sample movie dataset (replace or extend). Each movie: id, title, year, synopsis, poster, rating, runtime, genres[], cast[]
+    const MOVIES = [
+      {
+        id: "m1",
+        title: "Dhurandhar",
+        year: 2025,
+        synopsis: "A mysterious traveler slips into the heart of Karachi's underbelly and rises through its ranks with lethal precision, only to tear the notorious ISI-Underworld nexus apart from within.",
+        poster: "https://media.assettype.com/outlookindia/2025-10-16/3dkg7pwq/dhurandhar-song.jpg?auto=format%2Ccompress&fit=max&format=webp&w=768&dpr=1.0",
+        rating: 8.6,
+        runtime: "214 min",
+        genres: ["Action","Crime"],
+        cast: ["Ranveer Singh","Akshaye Khanna","Sanjay Dutt"],
+        type: ["Movie"],
+        imdb: "https://www.imdb.com/title/tt33014583/"
+      },
+      {
+        id: "m2",
+        title: "Homebound",
+        year: 2025,
+        synopsis: "Two friends from a North Indian village pursue police jobs seeking dignity, but their friendship strains as desperation grows in their quest.",
+        poster: "https://stat4.bollywoodhungama.in/wp-content/uploads/2025/09/Homebound-1.jpg",
+        rating: 8.0,
+        runtime: "119 min",
+        genres: ["Drama"],
+        cast: ["Ishaan Khatter","Vishal Jethwa","Janhvi Kapoor"],
+        type: ["TV Series"],
+        imdb: "https://www.imdb.com/title/tt26733325/?ref_=hm_tpks_t_5_pd_tp1_pbr_ic"
+      },
+      {
+        id: "m3",
+        title: "F1",
+        year: 2025,
+        synopsis: "A Formula One driver comes out of retirement to mentor and team up with a younger driver.",
+        poster: "https://raghuraman.me/wp-content/uploads/2025/08/f1_movie_poster.jpg?w=1024",
+        rating: 7.7,
+        runtime: "155 min",
+        genres: ["Sport","Action"],
+        cast: ["Brad Pitt","Damson Idris","Javier Bardem"],
+        imdb: "https://www.imdb.com/title/tt16311594/?ref_=fn_t_1"
+      },
+      {
+        id: "m4",
+        title: "Tere Ishk Mein",
+        year: 2025,
+        synopsis: "Shankar and Mukti's intense love story unfolds against the backdrop of Benaras, exploring surrender and transformation through an all-consuming romance that heals, hurts, and changes them.",
+        poster: "https://images.moneycontrol.com/static-mcnews/2025/10/20251004134812_Tere-Ishk-Mein-teaser.jpg?impolicy=website&width=770&height=431",
+        rating: 7.5,
+        runtime: "167 min",
+        genres: ["Romance","Musical"],
+        cast: ["Dhanush","Kriti Sanon"],
+        imdb: "https://www.imdb.com/title/tt28142095/"
+      },
+      {
+        id: "m5",
+        title: "Super 30",
+        year: 2019,
+        synopsis: "Based on the life of Patna-based mathematician Anand Kumar who runs the famed Super 30 program for IIT aspirants in Patna.",
+        poster: "https://static.toiimg.com/thumb/msid-70193412,width-1280,resizemode-4/70193412.jpg",
+        rating: 7.9,
+        runtime: "154 min",
+        genres: ["Biography","Drama"],
+        cast: ["Hrithik Roshan","Mrunal Thakur","Pankaj Tripathi"],
+        imdb: "https://www.imdb.com/title/tt7485048/?ref_=nv_sr_srsg_0_tt_8_nm_0_in_0_q_super%252030"
+      },
+      {
+        id: "m6",
+        title: "Zootopia 2",
+        year: 2025,
+        synopsis: "Brave rabbit cop Judy Hopps and her friend, the fox Nick Wilde, team up again to crack a new case, the most perilous and intricate of their careers.",
+        poster: "https://w0.peakpx.com/wallpaper/520/818/HD-wallpaper-zootopia-2-disney-3d-imax-2025-moive-poster.jpg",
+        rating:  7.5,
+        runtime: "108 min",
+        genres: ["Animation","Comedy"],
+        cast: ["Ginnifer Goodwin","Jason Bateman"],
+        imdb: "https://www.imdb.com/title/tt26443597/?ref_=chtbo_t_3"
+      },
+      {
+        id: "m7",
+        title: "12th Fail",
+        year: 2023,
+        synopsis: "The real-life story of IPS Officer Manoj Kumar Sharma and IRS Officer Shraddha Joshi.",
+        poster: "https://mir-s3-cdn-cf.behance.net/projects/404/c3cfef188399321.Y3JvcCwzMDAwLDIzNDYsMCw5Mjg.jpg",
+        rating:  8.7,
+        runtime: "147 min",
+        genres: ["Biography","Drama"],
+        cast: ["Vikrant Massey","Medha Shankr","Anant Joshi"],
+        imdb: "https://www.imdb.com/title/tt23849204/?ref_=fea_india_ss_toprated_%5Bobject%20Object%5D"
+      },
+      {
+        id: "m8",
+        title: "Maharaja",
+        year: 2024,
+        synopsis: "A barber seeks vengeance after his home is burglarized, cryptically telling police his 'lakshmi' has been taken, leaving them uncertain if it's a person or object. His quest to recover the elusive 'lakshmi' unfolds.",
+        poster: "https://static.toiimg.com/photo/110756815.jpeg",
+        rating:  8.3,
+        runtime: "141 min",
+        genres: ["Action","Thriller"],
+        cast: ["Vijay Sethupathi","Anurag Kashyap"],
+        imdb: "https://www.imdb.com/title/tt26548265/?ref_=tt_mlt_i_4"
+      },
+      {
+        id: "m9",
+        title: "Lucky Baskhar",
+        year: 2024,
+        synopsis: "A cash-strapped cashier working at a bank embarks on a risky investment scheme and soon gets drawn into the murky world of money laundering.",
+        poster: "https://p9dzm74w.tinifycdn.com/wp-content/uploads/2024/12/lucky-baskhar-feature.jpg",
+        rating:  8.0,
+        runtime: "148 min",
+        genres: ["Caper","Drama","Thriller"],
+        cast: ["Dulquer Salmaan","Meenaakshi Chaudhary","Tinnu Ananad"],
+        imdb: "https://www.imdb.com/title/tt27540542/?ref_=tt_mlt_i_8"
+      },
+      {
+        id: "m10",
+        title: "Sita Ramam",
+        year: 2022,
+        synopsis: "A soldier receives a life-changing letter from a woman named Sita, leading to a beautiful romance. Their love story takes an unexpected turn when he returns to his military post in Kashmir and faces imprisonment.",
+        poster: "https://blog.shortfundly.com/wp-content/uploads/2022/08/sita-ramam-trailer-arriving-on_b_2107221013.jpg",
+        rating:  8.5,
+        runtime: "163 min",
+        genres: ["Romance","Mystery","Drama"],
+        cast: ["Dulquer Salmaan","Mrunal Thakur","Rashmika Mandanna"],
+        imdb: "https://www.imdb.com/title/tt20850406/?ref_=tt_mlt_t_2"
+      },
+      {
+        id: "m11",
+        title: "PK",
+        year: 2014,
+        synopsis: "An alien on Earth loses the only device he can use to communicate with his spaceship. His innocent nature and child-like questions force the country to evaluate the impact of religious views on people.",
+        poster: "https://m.media-amazon.com/images/S/pv-target-images/5bc410282dbfa02ef005590eb9e16a3d1cc296024484f0697b2c37a0d6a5e8c2.jpg",
+        rating:  8.1,
+        runtime: "153 min",
+        genres: ["Comedy","Sci-Fi"],
+        cast: ["Aamir Khan","Anushka Sharma","Sanjay Dutt","Shushant Singh Rajput"],
+        imdb: "https://www.imdb.com/title/tt2338151/?ref_=fn_t_1"
+      },
+      {
+        id: "m12",
+        title: "Avengers: Endgame",
+        year: 2019,
+        synopsis: "After the devastating events of Avengers: Infinity War (2018), the universe is in ruins. With the help of remaining allies, the Avengers assemble once more in order to reverse Thanos' actions and restore balance to the universe.",
+        poster: "https://m.media-amazon.com/images/I/91WMenNUzEL._AC_UF894,1000_QL80_.jpg",
+        rating:  8.4,
+        runtime: "181 min",
+        genres: ["Action","Sci-Fi","Superhero"],
+        cast: ["Robert Downey Jr.","Chris Evans","Chris Hemsworth"],
+        imdb: "https://www.imdb.com/title/tt4154796/?ref_=nv_sr_srsg_6_tt_6_nm_2_in_0_q_ave"
+      },
+      {
+        id: "m13",
+        title: "Spider-Man: No Way Home",
+        year: 2021,
+        synopsis: "With Spider-Man's identity now revealed, Peter asks Doctor Strange for help. When a spell goes wrong, dangerous foes from other worlds start to appear.",
+        poster: "https://www.aceshowbiz.com/images/still/no-way-home-poster05.jpg",
+        rating:  8.2,
+        runtime: "148 min",
+        genres: ["Action","Sci-Fi","Superhero"],
+        cast: ["Tom Holland","Zendaya","Benedict Cumberbatch"],
+        imdb: "https://www.imdb.com/title/tt10872600/?ref_=nv_sr_srsg_8_tt_8_nm_0_in_0_q_Spider"
+      },
+      {
+        id: "m14",
+        title: "Interstellar",
+        year: 2014,
+        synopsis: "When Earth becomes uninhabitable in the future, a farmer and ex-NASA pilot, Joseph Cooper, is tasked to pilot a spacecraft, along with a team of researchers, to find a new planet for humans.",
+        poster: "https://i.pinimg.com/564x/9f/27/49/9f27497b3d55de241a8d453744595644.jpg",
+        rating:  8.7,
+        runtime: "169 min",
+        genres: ["Sci-Fi","Adventure","Time Travel"],
+        cast: ["Matthew McConaughey","Anne Hathaway","Jessica Chastain"],
+        imdb: "https://www.imdb.com/title/tt0816692/?ref_=nv_sr_srsg_0_tt_6_nm_2_in_0_q_int"
+      },
+      {
+        id: "m15",
+        title: "The Lord of the Rings: The Return of the King",
+        year: 2003,
+        synopsis: "Gandalf and Aragorn lead the World of Men against Sauron's army to draw his gaze from Frodo and Sam as they approach Mount Doom with the One Ring.",
+        poster: "https://www.sci-fimovieposters.co.uk/images/posters-l/L-0010_Lord_of_the_Rings_The_Return_of_the_King_The_quad_movie_poster_l.jpg",
+        rating:  9.0,
+        runtime: "201 min",
+        genres: ["Fantasy","Adventure"],
+        cast: ["Elijah Wood","Viggo Mortensen","Ian McKellen"],
+        imdb: "https://www.imdb.com/title/tt0167260/?ref_=nv_sr_srsg_10_tt_6_nm_1_in_0_q_the%2520lo"
+      },
+      {
+        id: "m16",
+        title: "Projapati",
+        year: 2022,
+        synopsis: "A retired 65-year widower, lives alone as his son, Joy, a wedding planner running his own business, has a very busy schedule. He wishes Joy to be married. Will he be successful?",
+        poster: "https://resizing.flixster.com/fFAYNzEPyruip4zy7TXPJ9QKwQU=/fit-in/705x460/v2/https://resizing.flixster.com/-XZAfHZM39UwaGJIFWKAE8fS0ak=/v3/t/assets/p23955201_v_h10_aa.jpg",
+        rating:  7.4,
+        runtime: "142 min",
+        genres: ["Drama"],
+        cast: ["Dev","Mithun Chakraborty","Koushani Mukherjee"],
+        imdb: "https://www.imdb.com/title/tt24074898/?ref_=nv_sr_srsg_3_tt_7_nm_1_in_0_q_proja"
+      },
+      {
+        id: "m17",
+        title: "Bohurupi",
+        year: 2024,
+        synopsis: "An itinerant showman, who amuses people and earns money by impersonating demons, undergoes a psychological transformation after having a miraculous dream.",
+        poster: "https://akm-img-a-in.tosshub.com/indiatoday/images/story/202412/bohurupi-becomes-third-highest-grossing-bengali-film-of-all-time-013517338-16x9_0.jpeg?VersionId=GscSY3pyvGv7NrMp5ZqpMY5Xq2p2GN95&size=690:388",
+        rating:  7.8,
+        runtime: "155 min",
+        genres: ["Drama","Action"],
+        cast: ["Shiboprosad Mukherjee","Abir Chatterjee","Ritabhari Chakraborty","Koushani Mukherjee"],
+        imdb: "https://www.imdb.com/title/tt32857110/?ref_=nv_sr_srsg_0_tt_8_nm_0_in_0_q_Bohuru"
+      },
+      {
+        id: "m18",
+        title: "Shotyi Bole Shotyi Kichhu Nei",
+        year: 2025,
+        synopsis: "People battling their inner demons in a gripping melting pot of memories in mind, where justice, morality and humanity clash in an electrifying showdown full of unpredictable twists.",
+        poster: "https://images.t2online.in/cdn-cgi/image/width=1200,fit=crop,gravity=auto,quality=70/https://apis.t2online.in/image/journal/article.jpg?img_id=1294353&t=1752517906344",
+        rating:  7.2,
+        runtime: "127 min",
+        genres: ["Mystery","Thriller"],
+        cast: ["Rahul Banerjee","Anirban Chakrabarty","Arjun Chakrabarty"],
+        imdb: "https://www.imdb.com/title/tt35118088/?ref_=tt_mlt_t_2"
+      },
+      {
+        id: "m19",
+        title: "Bramayugam",
+        year: 2024,
+        synopsis: "Thevan, a folk singer of the Paanan caste, has a fateful encounter when escaping slavery, leading to him discovering an ancient traditional mansion altering his destiny.",
+        poster: "https://preview.redd.it/bramayugam-%E0%B4%AD-%E0%B4%B0%E0%B4%AE%E0%B4%AF-%E0%B4%97-posters-v0-h3yd82b1e5fc1.jpg?width=640&crop=smart&auto=webp&s=106984606a93236b6626abfe211ec5beba25a1cb",
+        rating:  7.7,
+        runtime: "139 min",
+        genres: ["Horror","Drama","Thriller"],
+        cast: ["Mammootty","Arjun Ashokan","Sidharth Bharathan"],
+        imdb: "https://www.imdb.com/title/tt27431598/?ref_=nv_sr_srsg_10_tt_4_nm_4_in_0_q_bram"
+      },
+      {
+        id: "m20",
+        title: "Diés Iraé",
+        year: 2025,
+        synopsis: "Rohan's affluent lifestyle spirals out of control as he becomes convinced there is a supernatural entity in his home. As he uncovers the mystery, he is drawn into unexpected realms and alliances, along with the horrors that lie ahead.",
+        poster: "https://mir-s3-cdn-cf.behance.net/projects/808/0703bc236680037.Y3JvcCwxNDE4LDExMDksMCww.png",
+        rating:  6.9,
+        runtime: "116 min",
+        genres: ["Horror","Thriller"],
+        cast: ["Pranav Mohanlal","Sushmitha Bhat","Shine Tom Chacko"],
+        imdb: "https://www.imdb.com/title/tt36302733/?ref_=nv_sr_srsg_0_tt_7_nm_1_in_0_q_Dies"
+      },
+
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      },
+      {
+        id: "m6",
+        title: "ABC",
+        year: 2020,
+        synopsis: "HI",
+        poster: "https",
+        rating:  3.4,
+        runtime: "150 min",
+        genres: ["Drama"],
+        cast: ["Kushal Mondal"],
+        imdb: "https"
+      }
+    ];
+
+    // Utility: unique genres
+    const allGenres = [...new Set(MOVIES.flatMap(m => m.genres))].sort();
+
+    // Populate genre filter
+    const genreSelect = document.getElementById('genreFilter');
+    allGenres.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g;
+      opt.textContent = g;
+      genreSelect.appendChild(opt);
+    });
+
+    // Render movie cards
+    const moviesGrid = document.getElementById('moviesGrid');
+    const noResults = document.getElementById('noResults');
+
+    function renderMovies(list) {
+      moviesGrid.innerHTML = '';
+      if (!list.length) {
+        noResults.classList.remove('d-none');
+        return;
+      }
+      noResults.classList.add('d-none');
+
+      list.forEach(movie => {
+        const col = document.createElement('div');
+        col.className = 'col-12 col-sm-6 col-md-4 col-lg-3';
+
+        col.innerHTML = `
+          <article class="card movie-card h-100" role="article" aria-labelledby="title-${movie.id}">
+            <img src="${movie.poster}" alt="${escapeHtml(movie.title)} poster" class="poster" loading="lazy">
+            <div class="card-body">
+              <h5 id="title-${movie.id}" class="card-title mb-1">${escapeHtml(movie.title)}</h5>
+              <div class="small-muted mb-2">${movie.year} • <span class="rating">${movie.rating}</span></div>
+              <p class="card-text small-muted" style="min-height:48px">${escapeHtml(truncate(movie.synopsis, 120))}</p>
+              <div class="d-flex justify-content-between align-items-center mt-3">
+                <div>
+                  ${movie.genres.map(g => `<span class="chip" aria-hidden>${g}</span>`).join('')}
+                </div>
+                <div>
+                  <button class="btn btn-sm btn-outline-primary" data-id="${movie.id}" aria-label="View details of ${escapeHtml(movie.title)}">Details</button>
+                </div>
+              </div>
+            </div>
+          </article>
+        `;
+        moviesGrid.appendChild(col);
+      });
+
+      // attach detail handlers
+      moviesGrid.querySelectorAll('button[data-id]').forEach(btn => {
+        btn.addEventListener('click', () => openMovieModal(btn.getAttribute('data-id')));
+      });
+    }
+
+    // Initial render (sorted by popularity = rating desc)
+    renderMovies(MOVIES.slice().sort((a,b)=>b.rating-a.rating));
+
+    // Search, filter, sort
+    const searchInput = document.getElementById('search');
+    const sortSelect = document.getElementById('sortSelect');
+
+    function applyFilters() {
+      const q = searchInput.value.trim().toLowerCase();
+      const genre = genreSelect.value;
+      let results = MOVIES.filter(m => {
+        const inGenre = !genre || m.genres.includes(genre);
+        const inQuery = !q || (
+          m.title.toLowerCase().includes(q) ||
+          m.synopsis.toLowerCase().includes(q) ||
+          m.cast.join(' ').toLowerCase().includes(q) ||
+          m.genres.join(' ').toLowerCase().includes(q)
+        );
+        return inGenre && inQuery;
+      });
+
+      // sort
+      const sort = sortSelect.value;
+      if (sort === 'popular') results.sort((a,b)=>b.rating-a.rating);
+      else if (sort === 'newest') results.sort((a,b)=>b.year-b.year);
+      else if (sort === 'rating') results.sort((a,b)=>b.rating-b.rating);
+      else if (sort === 'title') results.sort((a,b)=>a.title.localeCompare(b.title));
+
+      renderMovies(results);
+    }
+
+    searchInput.addEventListener('input', debounce(applyFilters, 220));
+    genreSelect.addEventListener('change', applyFilters);
+    sortSelect.addEventListener('change', applyFilters);
+
+    // Modal logic
+    const modalEl = document.getElementById('movieModal');
+    const bsModal = new bootstrap.Modal(modalEl, {});
+
+    function openMovieModal(id) {
+      const movie = MOVIES.find(m => m.id === id);
+      if (!movie) return;
+      document.getElementById('modalPoster').src = movie.poster;
+      document.getElementById('modalPoster').alt = movie.title + ' poster';
+      document.getElementById('modalTitle').textContent = movie.title;
+      document.getElementById('modalMeta').textContent = `${movie.year} • ${movie.genres.join(', ')}`;
+      document.getElementById('modalRating').textContent = `★ ${movie.rating}`;
+      document.getElementById('modalRuntime').textContent = movie.runtime;
+      document.getElementById('modalSynopsis').textContent = movie.synopsis;
+      document.getElementById('modalGenres').innerHTML = movie.genres.map(g => `<span class="badge bg-light text-dark me-1">${g}</span>`).join('');
+      document.getElementById('modalCast').textContent = movie.cast.join(', ');
+      document.getElementById('imdbLink').href = movie.imdb || '#';
+
+      // Recommendations: simple rule-based
+      const recs = recommendMovies(movie, MOVIES, 4);
+      const recContainer = document.getElementById('modalRecommendations');
+      recContainer.innerHTML = recs.length ? recs.map(r => `
+        <div class="d-flex align-items-center gap-3 mb-2">
+          <img src="${r.poster}" alt="${escapeHtml(r.title)} poster" style="width:56px;height:56px;object-fit:cover;border-radius:8px">
+          <div>
+            <div><strong>${escapeHtml(r.title)}</strong> <span class="small-muted">(${r.year})</span></div>
+            <div class="recommendation small-muted">Shared: ${r.shared.join(', ')} • ★ ${r.rating}</div>
+          </div>
+        </div>
+      `).join('') : '<div class="small-muted">No recommendations available.</div>';
+
+      bsModal.show();
+    }
+
+    // Recommendation algorithm:
+    // Score = (#sharedGenres * 3) + (#sharedCast * 4) + normalizedRating
+    function recommendMovies(target, pool, limit=4) {
+      const others = pool.filter(m => m.id !== target.id);
+      const scored = others.map(m => {
+        const sharedGenres = m.genres.filter(g => target.genres.includes(g));
+        const sharedCast = m.cast.filter(c => target.cast.includes(c));
+        const score = (sharedGenres.length * 3) + (sharedCast.length * 4) + (m.rating / 10);
+        const shared = [...new Set([...sharedGenres, ...sharedCast])];
+        return { ...m, score, shared };
+      }).filter(s => s.score > 0); // only show movies with some overlap
+      scored.sort((a,b) => b.score - a.score || b.rating - a.rating);
+      return scored.slice(0, limit);
+    }
+
+    // Helpers
+    function truncate(str, n) {
+      return str.length > n ? str.slice(0,n-1) + '…' : str;
+    }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]); });
+    }
+    function debounce(fn, wait) {
+      let t;
+      return function(...args){ clearTimeout(t); t = setTimeout(()=>fn.apply(this,args), wait); };
+    }
+
+    // Accessibility: focus modal close on show
+    modalEl.addEventListener('shown.bs.modal', () => {
+      modalEl.querySelector('[data-bs-dismiss="modal"]').focus();
+    });
+
+    // Keyboard: quick focus to search with '/'
+    window.addEventListener('keydown', (e) => {
+      if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        searchInput.focus();
+      }
+    });
+  </script>
+
+  <!-- Bootstrap 5 JS (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 
